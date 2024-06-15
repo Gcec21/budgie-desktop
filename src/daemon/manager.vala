@@ -23,9 +23,10 @@ namespace Budgie {
 		Budgie.Notifications.Server? notifications;
 		Budgie.StatusNotifier.FreedesktopWatcher? status_notifier;
 		Budgie.MenuManager? menus;
-		Budgie.TabSwitcher? switcher;
+		//Budgie.TabSwitcher? switcher;
 		BudgieScr.ScreenshotServer? screenshotcontrol;
 		Budgie.XDGDirTracker? xdg_tracker;
+		Budgie.Background? background;
 
 		/**
 		* Construct a new ServiceManager and initialiase appropriately
@@ -45,8 +46,9 @@ namespace Budgie {
 			notifications.setup_dbus(replace);
 			menus = new Budgie.MenuManager();
 			menus.setup_dbus(replace);
-			switcher = new Budgie.TabSwitcher();
-			switcher.setup_dbus(replace);
+			//switcher = new Budgie.TabSwitcher();
+			//switcher.setup_dbus(replace);
+			background = new Budgie.Background();
 
 			try {
 				screenshotcontrol = new BudgieScr.ScreenshotServer();

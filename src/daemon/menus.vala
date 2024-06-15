@@ -28,8 +28,6 @@ namespace Budgie {
 	[DBus (name="org.budgie_desktop.MenuManager")]
 	public class MenuManager {
 		private Gtk.Menu? desktop_menu = null;
-		private unowned Wnck.Window? active_window = null;
-		private Wnck.ActionMenu? action_menu = null;
 		private uint32 xid = 0;
 
 		[DBus (visible=false)]
@@ -108,41 +106,6 @@ namespace Budgie {
 				stderr.printf("Error registering BudgieMenuManager: %s\n", e.message);
 			}
 			Budgie.setup = true;
-		}
-
-		/**
-		* We've been asked to display the root menu for the desktop itself,
-		* which contains actions for launching the settings, etc.
-		*/
-		public void ShowDesktopMenu(uint button, uint32 timestamp) throws DBusError, IOError {
-			Idle.add(() => {
-				if (desktop_menu.get_visible()) {
-					desktop_menu.hide();
-				} else {
-					popup_menu(desktop_menu, button, timestamp);
-				}
-				return false;
-			});
-		}
-
-		/**
-		* Show a window menu for the given window ID
-		*/
-		public void ShowWindowMenu(uint32 xid, uint button, uint32 timestamp) throws DBusError, IOError {
-			active_window = Wnck.Window.get(xid);
-			if (active_window == null) {
-				warning("invalid active_window");
-				return;
-			}
-
-			Idle.add(() => {
-				action_menu = new Wnck.ActionMenu(active_window);
-				action_menu.show_all();
-				popup_menu(action_menu, button, timestamp);
-				return false;
-			});
-
-			this.xid = xid;
 		}
 
 		private void popup_menu(Gtk.Menu menu, uint button, uint32 timestamp) {

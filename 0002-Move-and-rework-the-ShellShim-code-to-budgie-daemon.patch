@@ -1,0 +1,380 @@
+From 67a2c57a91a99720c5dc5c8b30c0c56e884928a6 Mon Sep 17 00:00:00 2001
+From: David Mohammed <fossfreedom@ubuntu.com>
+Date: Wed, 12 Jun 2024 20:57:23 +0000
+Subject: [PATCH 2/2] Move and rework the ShellShim code to budgie daemon We
+ need to interact with the session manager for the power dialog capability.
+
+---
+ src/daemon/endsession.ui      |   2 +-
+ src/daemon/endsession.vala    |   4 +-
+ src/daemon/main.vala          |  12 ++-
+ src/daemon/meson.build        |   1 +
+ src/daemon/shim.vala          | 194 ++++++++++++++++++++++++++++++++++
+ src/dialogs/power/window.vala |   7 +-
+ src/session/meson.build       |  24 -----
+ 7 files changed, 209 insertions(+), 35 deletions(-)
+ create mode 100644 src/daemon/shim.vala
+
+diff --git a/src/daemon/endsession.ui b/src/daemon/endsession.ui
+index ce6ab7c4..a8047498 100644
+--- a/src/daemon/endsession.ui
++++ b/src/daemon/endsession.ui
+@@ -2,7 +2,7 @@
+ <!-- Generated with glade 3.19.0 -->
+ <interface>
+   <requires lib="gtk+" version="3.12"/>
+-  <template class="BudgieEndSessionDialog" parent="GtkWindow">
++  <template class="BudgieSessionDialog" parent="GtkWindow">
+     <property name="can_focus">False</property>
+     <property name="window_position">center-always</property>
+     <property name="skip_taskbar_hint">True</property>
+diff --git a/src/daemon/endsession.vala b/src/daemon/endsession.vala
+index 273ba54a..8711c307 100644
+--- a/src/daemon/endsession.vala
++++ b/src/daemon/endsession.vala
+@@ -26,7 +26,7 @@ namespace Budgie {
+ 
+ 	[GtkTemplate (ui="/com/solus-project/budgie/endsession/endsession.ui")]
+ 	[DBus (name="org.budgie_desktop.Session.EndSessionDialog")]
+-	public class EndSessionDialog : Gtk.Window {
++	public class SessionDialog : Gtk.Window {
+ 		public signal void ConfirmedLogout();
+ 		public signal void ConfirmedReboot();
+ 		public signal void ConfirmedShutdown();
+@@ -112,7 +112,7 @@ namespace Budgie {
+ 		}
+ 
+ 		[DBus (visible=false)]
+-		public EndSessionDialog(bool replace) {
++		public SessionDialog(bool replace) {
+ 			var flags = BusNameOwnerFlags.ALLOW_REPLACEMENT;
+ 			if (replace) {
+ 				flags |= BusNameOwnerFlags.REPLACE;
+diff --git a/src/daemon/main.vala b/src/daemon/main.vala
+index 63969a52..a3c70db6 100644
+--- a/src/daemon/main.vala
++++ b/src/daemon/main.vala
+@@ -45,8 +45,9 @@ public static int main(string[] args) {
+ 	OptionContext ctx;
+ 
+ 	Budgie.ServiceManager? manager = null;
+-	Budgie.EndSessionDialog? end_dialog = null;
++	Budgie.SessionDialog? end_dialog = null;
+ 	Budgie.SettingsManager? settings = null;
++	Budgie.ShellShim? shim = null;
+ 	Intl.setlocale(LocaleCategory.ALL, "");
+ 	Intl.bindtextdomain(Budgie.GETTEXT_PACKAGE, Budgie.LOCALEDIR);
+ 	Intl.bind_textdomain_codeset(Budgie.GETTEXT_PACKAGE, "UTF-8");
+@@ -67,17 +68,20 @@ public static int main(string[] args) {
+ 	/* Initialize libnotify */
+ 	Notify.init("com.solus-project.budgie-daemon");
+ 
++	shim = new Budgie.ShellShim();
++	shim.serve();
+ 	manager = new Budgie.ServiceManager(replace);
+-	end_dialog = new Budgie.EndSessionDialog(replace);
++	end_dialog = new Budgie.SessionDialog(replace);
+ 	settings = new Budgie.SettingsManager();
+ 
+-	end_dialog.Opened.connect(settings.do_disable_quietly); // When we've opened the EndSession dialog, disable Caffeine Mode
+-	end_dialog.Closed.connect(settings.do_disable_quietly); // When we've closed the EndSession dialog as well, ensure Caffeine mode is disabled
++	end_dialog.Opened.connect(settings.do_disable_quietly); // When we've opened the Session dialog, disable Caffeine Mode
++	end_dialog.Closed.connect(settings.do_disable_quietly); // When we've closed the Session dialog as well, ensure Caffeine mode is disabled
+ 
+ 	/* Enter main loop */
+ 	Gtk.main();
+ 
+ 	/* Deref - clean */
++	shim = null;
+ 	manager = null;
+ 	end_dialog = null;
+ 	settings = null;
+diff --git a/src/daemon/meson.build b/src/daemon/meson.build
+index 6311ac3a..83c5df29 100644
+--- a/src/daemon/meson.build
++++ b/src/daemon/meson.build
+@@ -28,6 +28,7 @@ daemon_sources = [
+     'notifications/dbus.vala',
+     'notifications/popup.vala',
+     'screenshot.vala',
++    'shim.vala',
+     'background.vala',
+     'statusnotifier.vala',
+     'main.vala',
+diff --git a/src/daemon/shim.vala b/src/daemon/shim.vala
+new file mode 100644
+index 00000000..8c441ece
+--- /dev/null
++++ b/src/daemon/shim.vala
+@@ -0,0 +1,194 @@
++/*
++ * This file is part of budgie-desktop
++ *
++ * Copyright Budgie Desktop Developers
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ */
++
++namespace Budgie {
++	[DBus (name="org.gnome.SessionManager.EndSessionDialog")]
++	public class SessionHandler : GLib.Object {
++		public signal void ConfirmedLogout();
++		public signal void ConfirmedReboot();
++		public signal void ConfirmedShutdown();
++		public signal void Canceled();
++		public signal void Closed();
++
++		private EndSessionDialog? proxy = null;
++
++		public SessionHandler() {
++			Bus.watch_name(BusType.SESSION, "org.budgie_desktop.Session.EndSessionDialog",
++				BusNameWatcherFlags.NONE, has_dialog, lost_dialog);
++		}
++
++		void on_dialog_get(Object? o, AsyncResult? res) {
++			try {
++				proxy = Bus.get_proxy.end(res);
++				proxy.ConfirmedLogout.connect(() => {
++					this.ConfirmedLogout();
++				});
++				proxy.ConfirmedReboot.connect(() => {
++					this.ConfirmedReboot();
++				});
++				proxy.ConfirmedShutdown.connect(() => {
++					this.ConfirmedShutdown();
++				});
++				proxy.Canceled.connect(() => {
++					this.Canceled();
++				});
++				proxy.Closed.connect(() => {
++					this.Closed();
++				});
++			} catch (Error e) {
++				proxy = null;
++			}
++		}
++
++		void has_dialog() {
++			if (proxy != null) {
++				return;
++			}
++			Bus.get_proxy.begin<EndSessionDialog>(BusType.SESSION, "org.budgie_desktop.Session.EndSessionDialog", "/org/budgie_desktop/Session/EndSessionDialog", 0, null, on_dialog_get);
++		}
++
++		void lost_dialog() {
++			proxy = null;
++		}
++
++		public void Open(uint type, uint timestamp, uint open_length, ObjectPath[] inhibiters) throws DBusError, IOError {
++			if (proxy == null) {
++				return;
++			}
++			try {
++				proxy.Open(type, timestamp, open_length, inhibiters);
++			} catch (Error e) {
++				message(e.message);
++			}
++		}
++
++		public void Close() throws DBusError, IOError {
++			if (proxy == null) {
++				try {
++					proxy.Close();
++				} catch (Error e) {
++					message(e.message);
++				}
++			}
++		}
++	}
++
++	/**
++	* Wrap the EndSessionDialog type inside Budgie itself
++	*/
++	[DBus (name="org.budgie_desktop.Session.EndSessionDialog")]
++	public interface EndSessionDialog : GLib.Object {
++		public signal void ConfirmedLogout();
++		public signal void ConfirmedReboot();
++		public signal void ConfirmedShutdown();
++		public signal void Canceled();
++		public signal void Closed();
++
++		public abstract void Open(uint type, uint timestamp, uint open_length, ObjectPath[] inhibiters) throws DBusError, IOError;
++
++		public abstract void Close() throws DBusError, IOError;
++	}
++
++	/**
++	* Expose the BudgieOSD functionality for proxying of the Shell OSD Functionality
++	*/
++	[DBus (name="org.budgie_desktop.BudgieOSD")]
++	public interface BudgieOSD : GLib.Object {
++		/**
++		* Budgie GTK+ On Screen Display
++		*
++		* Valid params:
++		*   icon: string
++		*   label: string
++		*   level: int32
++		*   monitor: int32
++		*/
++		public abstract async void ShowOSD(HashTable<string,Variant> params) throws DBusError, IOError;
++	}
++
++	[DBus (name="org.gnome.Shell")]
++	public class ShellShim : GLib.Object {
++		//HashTable<string,uint?> grabs;
++		
++		private SessionHandler? handler = null;
++
++		/* Proxy off the OSD Calls */
++		private BudgieOSD? osd_proxy = null;
++		
++		[DBus (visible=false)]
++		public ShellShim() {
++			//grabs = new HashTable<string,uint?>(str_hash, str_equal);
++			//wm = _wm;
++
++			//display = wm.get_display();
++			//display.accelerator_activated.connect(on_accelerator_activated);
++
++			handler = new SessionHandler();
++
++			Bus.watch_name(BusType.SESSION, "org.budgie_desktop.BudgieOSD",
++				BusNameWatcherFlags.NONE, has_osd_proxy, lost_osd_proxy);
++		}
++
++		/**
++		* BudgieOSD known to be present, now try to get the proxy
++		*/
++		void on_osd_proxy_get(Object? o, AsyncResult? res) {
++			try {
++				osd_proxy = Bus.get_proxy.end(res);
++			} catch (Error e) {
++				osd_proxy = null;
++			}
++		}
++
++		/**
++		* BudgieOSD appeared, schedule a proxy-get
++		*/
++		void has_osd_proxy() {
++			if (osd_proxy  != null) {
++				return;
++			}
++			Bus.get_proxy.begin<BudgieOSD>(BusType.SESSION, "org.budgie_desktop.BudgieOSD", "/org/budgie_desktop/BudgieOSD", 0, null, on_osd_proxy_get);
++		}
++
++		/**
++		* BudgieOSD disappeared, drop the reference
++		*/
++		void lost_osd_proxy() {
++			osd_proxy = null;
++		}
++
++		void on_bus_acquired(DBusConnection conn) {
++			try {
++				conn.register_object("/org/gnome/Shell", this);
++				conn.register_object("/org/gnome/SessionManager/EndSessionDialog", handler);
++			} catch (Error e) {
++				message("Unable to register ShellShim: %s", e.message);
++			}
++		}
++
++		[DBus (visible=false)]
++		public void serve() {
++			Bus.own_name(BusType.SESSION, "org.gnome.Shell",
++				BusNameOwnerFlags.ALLOW_REPLACEMENT|BusNameOwnerFlags.REPLACE,
++				on_bus_acquired, null, null);
++		}
++
++		/**
++		* Show the OSD when requested.
++		*/
++		public void ShowOSD(HashTable<string,Variant> params) throws DBusError, IOError {
++			if (osd_proxy != null) {
++				osd_proxy.ShowOSD.begin(params);
++			}
++		}
++
++	}
++}
+diff --git a/src/dialogs/power/window.vala b/src/dialogs/power/window.vala
+index 2574f707..ea4a599b 100644
+--- a/src/dialogs/power/window.vala
++++ b/src/dialogs/power/window.vala
+@@ -20,7 +20,7 @@ namespace Budgie {
+ 	 * This widget is the meat of the application. It contains
+ 	 * a grid of buttons, and handles all of the necessary events.
+ 	 *
+-	 * There are a few CSS classes to better fascilitate theming:
++	 * There are a few CSS classes to better facilitate theming:
+ 	 * GtkWindow: budgie-power-dialog
+ 	 *   GtkBox: background, drop-shadow
+ 	 *     GtkGrid: power-button-grid
+@@ -181,7 +181,7 @@ namespace Budgie {
+ 				warning("Unable to connect to logind: %s", e.message);
+ 			}
+ 
+-			try {
++			/*try {
+ 				screensaver = yield Bus.get_proxy(BusType.SESSION, "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver");
+ 			} catch (Error e) {
+ #if HAVE_GNOME_SCREENSAVER
+@@ -190,7 +190,7 @@ namespace Budgie {
+ 				warning("Unable to connect to budgie-screensaver: %s", e.message);
+ #endif
+ 				return;
+-			}
++			}*/
+ 
+ 			try {
+ 				session_manager = yield Bus.get_proxy(BusType.SESSION, G_SESSION, "/org/gnome/SessionManager");
+@@ -219,7 +219,6 @@ namespace Budgie {
+ 		private void logout() {
+ 			hide();
+ 			if (session_manager == null) return;
+-
+ 			Idle.add(() => {
+ 				try {
+ 					session_manager.Logout(0);
+diff --git a/src/session/meson.build b/src/session/meson.build
+index c6f5fb53..255c0a85 100644
+--- a/src/session/meson.build
++++ b/src/session/meson.build
+@@ -123,30 +123,6 @@ custom_target('desktop-file-nm-applet',
+     install_dir : xdg_appdir,
+ )
+ 
+-# Write the budgie-desktop-screensaver.in file from the appropriate .in.in
+-if with_gnome_screensaver == true
+-    session_screensaver = configure_file(
+-        input: 'budgie-desktop-screensaver-gnome.desktop.in.in',
+-        output: 'budgie-desktop-screensaver.desktop.in',
+-        configuration: session_data,
+-    )
+-else
+-    session_screensaver = configure_file(
+-        input: 'budgie-desktop-screensaver.desktop.in.in',
+-        output: 'budgie-desktop-screensaver.desktop.in',
+-        configuration: session_data,
+-    )
+-endif
+-
+-# Merge + install screensaver
+-custom_target('desktop-file-screensaver',
+-    input : session_screensaver,
+-    output : 'org.buddiesofbudgie.BudgieDesktopScreensaver.desktop',
+-    command : [intltool, '--desktop-style', podir, '@INPUT@', '@OUTPUT@'],
+-    install : true,
+-    install_dir : xdg_appdir,
+-)
+-
+ # Merge + install power dialog
+ session_power_dialog_desktop = configure_file(
+     input: 'budgie-desktop-powerdialog.desktop.in.in',
+-- 
+2.43.0
+

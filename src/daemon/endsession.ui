@@ -2,7 +2,7 @@
 <!-- Generated with glade 3.19.0 -->
 <interface>
   <requires lib="gtk+" version="3.12"/>
-  <template class="BudgieEndSessionDialog" parent="GtkWindow">
+  <template class="BudgieSessionDialog" parent="GtkWindow">
     <property name="can_focus">False</property>
     <property name="window_position">center-always</property>
     <property name="skip_taskbar_hint">True</property>

@@ -20,7 +20,7 @@ namespace Budgie {
 	 * This widget is the meat of the application. It contains
 	 * a grid of buttons, and handles all of the necessary events.
 	 *
-	 * There are a few CSS classes to better fascilitate theming:
+	 * There are a few CSS classes to better facilitate theming:
 	 * GtkWindow: budgie-power-dialog
 	 *   GtkBox: background, drop-shadow
 	 *     GtkGrid: power-button-grid
@@ -181,7 +181,7 @@ namespace Budgie {
 				warning("Unable to connect to logind: %s", e.message);
 			}
 
-			try {
+			/*try {
 				screensaver = yield Bus.get_proxy(BusType.SESSION, "org.gnome.ScreenSaver", "/org/gnome/ScreenSaver");
 			} catch (Error e) {
 #if HAVE_GNOME_SCREENSAVER
@@ -190,7 +190,7 @@ namespace Budgie {
 				warning("Unable to connect to budgie-screensaver: %s", e.message);
 #endif
 				return;
-			}
+			}*/
 
 			try {
 				session_manager = yield Bus.get_proxy(BusType.SESSION, G_SESSION, "/org/gnome/SessionManager");
@@ -219,7 +219,6 @@ namespace Budgie {
 		private void logout() {
 			hide();
 			if (session_manager == null) return;
-
 			Idle.add(() => {
 				try {
 					session_manager.Logout(0);

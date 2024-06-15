@@ -26,7 +26,7 @@ namespace Budgie {
 
 	[GtkTemplate (ui="/com/solus-project/budgie/endsession/endsession.ui")]
 	[DBus (name="org.budgie_desktop.Session.EndSessionDialog")]
-	public class EndSessionDialog : Gtk.Window {
+	public class SessionDialog : Gtk.Window {
 		public signal void ConfirmedLogout();
 		public signal void ConfirmedReboot();
 		public signal void ConfirmedShutdown();
@@ -114,7 +114,7 @@ namespace Budgie {
 		}
 
 		[DBus (visible=false)]
-		public EndSessionDialog(bool replace) {
+		public SessionDialog(bool replace) {
 			var flags = BusNameOwnerFlags.ALLOW_REPLACEMENT;
 			if (replace) {
 				flags |= BusNameOwnerFlags.REPLACE;

@@ -45,10 +45,9 @@ public static int main(string[] args) {
 	OptionContext ctx;
 
 	Budgie.ServiceManager? manager = null;
-	Budgie.EndSessionDialog? end_dialog = null;
+	Budgie.SessionDialog? end_dialog = null;
 	Budgie.SettingsManager? settings = null;
-	Wnck.Screen? screen = null;
-
+	Budgie.ShellShim? shim = null;
 	Intl.setlocale(LocaleCategory.ALL, "");
 	Intl.bindtextdomain(Budgie.GETTEXT_PACKAGE, Budgie.LOCALEDIR);
 	Intl.bind_textdomain_codeset(Budgie.GETTEXT_PACKAGE, "UTF-8");
@@ -66,33 +65,26 @@ public static int main(string[] args) {
 		return 0;
 	}
 
-	/* Initialise wnck after gtk-start */
-	Idle.add(() => {
-		screen = Wnck.Screen.get_default();
-		if (screen != null) {
-			screen.force_update();
-		}
-		return false;
-	});
-
 	/* Initialize libnotify */
 	Notify.init("com.solus-project.budgie-daemon");
 
+	shim = new Budgie.ShellShim();
+	shim.serve();
 	manager = new Budgie.ServiceManager(replace);
-	end_dialog = new Budgie.EndSessionDialog(replace);
+	end_dialog = new Budgie.SessionDialog(replace);
 	settings = new Budgie.SettingsManager();
 
-	end_dialog.Opened.connect(settings.do_disable_quietly); // When we've opened the EndSession dialog, disable Caffeine Mode
-	end_dialog.Closed.connect(settings.do_disable_quietly); // When we've closed the EndSession dialog as well, ensure Caffeine mode is disabled
+	end_dialog.Opened.connect(settings.do_disable_quietly); // When we've opened the Session dialog, disable Caffeine Mode
+	end_dialog.Closed.connect(settings.do_disable_quietly); // When we've closed the Session dialog as well, ensure Caffeine mode is disabled
 
 	/* Enter main loop */
 	Gtk.main();
 
 	/* Deref - clean */
+	shim = null;
 	manager = null;
 	end_dialog = null;
 	settings = null;
-	screen = null;
 
 	return 0;
 }

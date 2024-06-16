@@ -79,17 +79,17 @@ budgie_wm_vala_args =  [
 rpath = dep_wm.get_pkgconfig_variable('typelibdir')
 budgie_wm_vala_args += ['--girdir', rpath]
 
-#executable(
-#    'budgie-wm', budgie_wm_sources,
-#    dependencies: budgie_wm_deps,
-#    include_directories: extra_includes,
-#    install: true,
-#    vala_args: budgie_wm_vala_args,
-#    c_args: [
-#        '-DGNOME_DESKTOP_USE_UNSTABLE_API',
-#    ],
-#    install_rpath: rpath,
-#)
+executable(
+    'budgie-wm', budgie_wm_sources,
+    dependencies: budgie_wm_deps,
+    include_directories: extra_includes,
+    install: true,
+    vala_args: budgie_wm_vala_args,
+    c_args: [
+        '-DGNOME_DESKTOP_USE_UNSTABLE_API',
+    ],
+    install_rpath: rpath,
+)
 
 # gschemas
 install_data(

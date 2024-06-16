@@ -13,20 +13,6 @@ namespace Budgie {
 	public const string RAVEN_DBUS_NAME = "org.budgie_desktop.Raven";
 	public const string RAVEN_DBUS_OBJECT_PATH = "/org/budgie_desktop/Raven";
 
-	public GtkLayerShell.Edge gtk_position_to_layer_shell_edge(Gtk.PositionType position) {
-		switch (position) {
-			case Gtk.PositionType.TOP:
-				return GtkLayerShell.Edge.TOP;
-			case Gtk.PositionType.BOTTOM:
-				return GtkLayerShell.Edge.BOTTOM;
-			case Gtk.PositionType.LEFT:
-				return GtkLayerShell.Edge.LEFT;
-			case Gtk.PositionType.RIGHT:
-				return GtkLayerShell.Edge.RIGHT;
-		}
-		return GtkLayerShell.Edge.BOTTOM;
-	}
-
 	/**
 	 * Possible positions for Raven to be in.
 	 *
@@ -181,12 +167,13 @@ namespace Budgie {
 		public Gtk.PositionType screen_edge {
 			public set {
 				this._screen_edge = value;
+				bool is_right = this._screen_edge == Gtk.PositionType.RIGHT;
 
 				if (this.iface != null) {
 					this.iface.AnchorChanged(this.screen_edge == Gtk.PositionType.LEFT);
 				}
 
-				if (this._screen_edge == Gtk.PositionType.RIGHT) {
+				if (is_right) {
 					layout.child_set(shadow, "position", 0);
 					this.get_style_context().add_class(Budgie.position_class_name(PanelPosition.RIGHT));
 					this.get_style_context().remove_class(Budgie.position_class_name(PanelPosition.LEFT));
@@ -198,15 +185,21 @@ namespace Budgie {
 					this.shadow.position = Budgie.PanelPosition.LEFT;
 				}
 
-				if (libxfce4windowing.windowing_get() == libxfce4windowing.Windowing.WAYLAND) {
-					// TODO: Raven on left ends up taking up the whole screen, unlike right, so we need to fix this
-					GtkLayerShell.set_anchor(
-						this,
-						Budgie.gtk_position_to_layer_shell_edge(value),
-						true
-					);
-				}
-			}
+				GtkLayerShell.Edge raven_edge = is_right ? GtkLayerShell.Edge.RIGHT : GtkLayerShell.Edge.LEFT;
+				GtkLayerShell.Edge old_edge = is_right ? GtkLayerShell.Edge.LEFT : GtkLayerShell.Edge.RIGHT;
+
+				GtkLayerShell.set_anchor(
+					this,
+					old_edge,
+					false
+				);
+
+				GtkLayerShell.set_anchor(
+					this,
+					raven_edge,
+					true
+				);
+		}
 			public get {
 				return this._screen_edge;
 			}
@@ -371,8 +364,6 @@ namespace Budgie {
 			main_view = new Budgie.MainView();
 			main_box.pack_start(main_view, true, true, 0);
 
-			set_default_size(400, -1);
-
 			main_view.requested_draw.connect(() => {
 				queue_draw();
 			});
@@ -383,7 +374,7 @@ namespace Budgie {
 			set_keep_above(true);
 			set_decorated(false);
 
-			//set_size_request(-1, -1);
+			set_size_request(-1, -1);
 			if (!this.get_realized()) {
 				this.realize();
 			}

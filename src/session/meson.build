@@ -15,26 +15,24 @@ session_data.set('libexecdir', libexecdir)
 #    'org.gnome.SettingsDaemon.A11yKeyboard'
 #    'org.gnome.SettingsDaemon.A11ySettings',
 #    'org.gnome.SettingsDaemon.Color',
+#    'org.gnome.SettingsDaemon.Datetime',
+#    'org.gnome.SettingsDaemon.Housekeeping',
+#    'org.gnome.SettingsDaemon.Keyboard',
+#    'org.gnome.SettingsDaemon.Power',
+#    'org.gnome.SettingsDaemon.PrintNotifications',
+#    'org.gnome.SettingsDaemon.Rfkill',
+#    'org.gnome.SettingsDaemon.Sharing',
+#    'org.gnome.SettingsDaemon.Smartcard',
+#    'org.gnome.SettingsDaemon.Sound',
+#    'org.gnome.SettingsDaemon.Wacom',
+#    'org.gnome.SettingsDaemon.Clipboard',
+#    'org.gnome.SettingsDaemon.Mouse'
 
 gnome_session_components = [
-    'gnome-settings-daemon',
-    'org.gnome.SettingsDaemon.Datetime',
-    'org.gnome.SettingsDaemon.Housekeeping',
-    'org.gnome.SettingsDaemon.Keyboard',
-    'org.gnome.SettingsDaemon.Power',
-    'org.gnome.SettingsDaemon.PrintNotifications',
-    'org.gnome.SettingsDaemon.Rfkill',
-    'org.gnome.SettingsDaemon.Sharing',
-    'org.gnome.SettingsDaemon.Smartcard',
-    'org.gnome.SettingsDaemon.Sound',
-    'org.gnome.SettingsDaemon.Wacom',
-    'org.gnome.SettingsDaemon.Clipboard',
-    'org.gnome.SettingsDaemon.Mouse'
 ]
 
 # Always in Budgie
 budgie_components = [
-    'org.buddiesofbudgie.BudgieWm',
     'org.buddiesofbudgie.BudgieDaemon',
     'org.buddiesofbudgie.BudgiePanel',
     'org.buddiesofbudgie.BudgiePowerDialog'

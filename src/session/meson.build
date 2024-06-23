@@ -5,41 +5,31 @@ session_data = configuration_data()
 session_data.set('PACKAGE_VERSION', package_version)
 session_data.set('libexecdir', libexecdir)
 
+# list of gnome-session components removed for magpie-wm development
+# will need to adjust as development proceeds
+#     'org.gnome.SettingsDaemon.MediaKeys',
+#    'org.gnome.SettingsDaemon.XSettings',
+#    'org.gnome.SettingsDaemon.Orientation',
+#    'org.gnome.SettingsDaemon.XRANDR',
+#    'org.gnome.SettingsDaemon.ScreensaverProxy',
+#    'org.gnome.SettingsDaemon.A11yKeyboard'
+#    'org.gnome.SettingsDaemon.A11ySettings',
+#    'org.gnome.SettingsDaemon.Color',
+
 gnome_session_components = [
     'gnome-settings-daemon',
-]
-
-gnome_session_324_components = [
-    'org.gnome.SettingsDaemon.A11ySettings',
-    'org.gnome.SettingsDaemon.Color',
     'org.gnome.SettingsDaemon.Datetime',
     'org.gnome.SettingsDaemon.Housekeeping',
     'org.gnome.SettingsDaemon.Keyboard',
-    'org.gnome.SettingsDaemon.MediaKeys',
     'org.gnome.SettingsDaemon.Power',
     'org.gnome.SettingsDaemon.PrintNotifications',
     'org.gnome.SettingsDaemon.Rfkill',
-    'org.gnome.SettingsDaemon.ScreensaverProxy',
     'org.gnome.SettingsDaemon.Sharing',
     'org.gnome.SettingsDaemon.Smartcard',
     'org.gnome.SettingsDaemon.Sound',
     'org.gnome.SettingsDaemon.Wacom',
-    'org.gnome.SettingsDaemon.XSettings',
-]
-
-gsd_324_key = [
-    'org.gnome.SettingsDaemon.A11yKeyboard'
-]
-
-gsd_324_mc = [
     'org.gnome.SettingsDaemon.Clipboard',
     'org.gnome.SettingsDaemon.Mouse'
-]
-
-
-gsd_324_max = [
-    'org.gnome.SettingsDaemon.Orientation',
-    'org.gnome.SettingsDaemon.XRANDR',
 ]
 
 # Always in Budgie
@@ -54,19 +44,7 @@ if with_polkit == true
     budgie_components += 'org.buddiesofbudgie.BudgiePolkit'
 endif
 
-dep_gsd = dependency('gnome-settings-daemon', version: gnome_minimum_version)
-# Merge the list depending on the gnome-settings-daemon version.
-if dep_gsd.version().version_compare('>=3.33.90')
-    session_components = budgie_components + gnome_session_324_components
-elif dep_gsd.version().version_compare('>=3.27.90')
-    session_components = budgie_components + gnome_session_324_components + gsd_324_mc
-elif dep_gsd.version().version_compare('>=3.25.4')
-    session_components = budgie_components + gnome_session_324_components + gsd_324_mc + gsd_324_key
-elif dep_gsd.version().version_compare('>=3.23.3')
-    session_components = budgie_components + gnome_session_324_components + gsd_324_mc + gsd_324_key + gsd_324_max
-else
-    session_components = gnome_session_components + budgie_components
-endif
+session_components = gnome_session_components + budgie_components
 
 # Set the session list
 session_data.set('SESSION_COMPONENTS', ';'.join(session_components))
@@ -97,20 +75,20 @@ configure_file(
     install_dir: join_paths(get_option('prefix'), get_option('bindir')),
 )
 
-# Configure the xsession file
-xsession_conf = configure_file(
+# Configure the waylandsession file
+waylandsession_conf = configure_file(
     input: 'budgie-desktop.desktop.in.in',
     output: 'budgie-desktop.desktop.in',
     configuration: session_data,
 )
 
 # Now merge the translations of the .desktop.in to a .desktop
-custom_target('desktop-file-xsession',
-    input : xsession_conf,
+custom_target('desktop-file-waylandsession',
+    input : waylandsession_conf,
     output : 'budgie-desktop.desktop',
     command : [intltool, '--desktop-style', podir, '@INPUT@', '@OUTPUT@'],
     install : true,
-    install_dir : join_paths(datadir, 'xsessions'),
+    install_dir : join_paths(datadir, 'wayland-sessions'),
 )
 
 
